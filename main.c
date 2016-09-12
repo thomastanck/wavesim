@@ -5,20 +5,44 @@
 
 #define MAX_REACH 1
 
-float sigmoid(float x) {
+// Utils
 
-    return 1 / ( 1+exp(-x));
+float sigmoid(float x) {
+    return 1 / (1+exp(-x));
 }
 
-struct frame {
+float max(float x, float y) {
+    return ((x > y) ? x : y);
+}
 
+// Structs
+
+typedef struct frame {
     int width, height;
     float values[];
-};
+} frame;
 
-struct frame *frame_init(int width, int height) {
+typedef struct world {
 
-    struct frame *frame = (struct frame *) calloc(sizeof(struct frame) + sizeof(float) * width * height, sizeof(char));
+    int width, height;
+
+    frame *accelerations;
+    frame *velocities;
+    frame *positions;
+
+    frame *output;
+} world;
+
+typedef struct RGB {
+    unsigned char r;
+    unsigned char g;
+    unsigned char b;
+} RGB;
+
+// Frame shit
+
+frame *frame_init(int width, int height) {
+    frame *frame = (struct frame *) calloc(sizeof(frame) + sizeof(float) * width * height, sizeof(char));
     if (frame == NULL)
         return frame;
 
@@ -28,95 +52,66 @@ struct frame *frame_init(int width, int height) {
     return frame;
 }
 
-void frame_kill(struct frame *frame) {
+void frame_kill(frame *frame) {
     free(frame);
 }
 
 // 'safe' read/write functions.
-int out_of_frame(struct frame *frame, int x, int y) {
+int out_of_frame(frame *frame, int x, int y) {
     return (x < 0) || (x >= frame->width) || (y < 0) || (y >= frame->height);
 }
 
-float frame_read(struct frame *frame, int x, int y, float def) {
-
+float frame_read(frame *frame, int x, int y, float def) {
     if ((x < 0) || (x >= frame->width) || (y < 0) || (y >= frame->height))
         return def;
 
     return frame->values[frame->width * y + x];
 }
 
-void frame_write(struct frame *frame, int x, int y, float value) {
-
+void frame_write(frame *frame, int x, int y, float value) {
     if ((x < 0) || (x >= frame->width) || (y < 0) || (y >= frame->height))
         return;
 
     frame->values[frame->width * y + x] = value;
 }
 
-static char *vbuf = NULL;
+// RGB shit
 
-struct RGB {
-    unsigned char r;
-    unsigned char g;
-    unsigned char b;
-};
-
-struct RGB newRGB(unsigned char r, unsigned char g, unsigned char b) {
-    struct RGB color;
+RGB newRGB(unsigned char r, unsigned char g, unsigned char b) {
+    RGB color;
     color.r = r;
     color.g = g;
     color.b = b;
     return color;
 }
 
-struct RGB interpolatecolor(struct RGB start, struct RGB end, unsigned char val) {
-    struct RGB color;
+RGB interpolatecolor(RGB start, RGB end, unsigned char val) {
+    RGB color;
     color.r = ((unsigned)start.r * (255-(unsigned)val) + (unsigned)end.r * (unsigned)val) / 255;
     color.g = ((unsigned)start.g * (255-(unsigned)val) + (unsigned)end.g * (unsigned)val) / 255;
     color.b = ((unsigned)start.b * (255-(unsigned)val) + (unsigned)end.b * (unsigned)val) / 255;
     return color;
 }
 
-void outputcolor(struct RGB color) {
+void outputcolor(RGB color) {
     printf("%u,%u,%u\n", color.r, color.g, color.b);
 }
 
+// Display shit
+
+static char *vbuf = NULL;
 void stdoutsetvbuf(size_t n) {
     vbuf = realloc(vbuf, n);
     setvbuf(stdout, vbuf, _IOFBF, n);
 }
 
-void outputcell(struct RGB color) {
+void outputcell(RGB color) {
     printf("\033[48;2;%u;%u;%u;m  \033[0m", color.r, color.g, color.b);
 }
 
-void testdisplay() {
-    printf("\033[48;2;0;0;255;m  \033[0m\n");
-    printf("\033[48;2;64;0;191;m  \033[0m\n");
-    printf("\033[48;2;128;0;127;m  \033[0m\n");
-    printf("\033[48;2;192;0;63;m  \033[0m\n");
-    printf("\033[48;2;255;0;0;m  \033[0m\n");
-    printf("\n");
-    struct RGB start = newRGB(0, 0, 255);
-    struct RGB end = newRGB(255, 0, 0);
-    outputcell(interpolatecolor(start, end, 0));
-    outputcell(interpolatecolor(start, end, 64));
-    outputcell(interpolatecolor(start, end, 128));
-    outputcell(interpolatecolor(start, end, 192));
-    outputcell(interpolatecolor(start, end, 255));
-    printf("\n");
-    outputcell(interpolatecolor(start, end, 255));
-    outputcell(interpolatecolor(start, end, 192));
-    outputcell(interpolatecolor(start, end, 127));
-    outputcell(interpolatecolor(start, end, 64));
-    outputcell(interpolatecolor(start, end, 0));
-    printf("\n");
-    fflush(stdout);
-}
-
-void displayframe(struct frame *frame) {
-    struct RGB start = newRGB(0, 0, 255);
-    struct RGB end = newRGB(255, 0, 0);
+void displayframe(frame *frame) {
+    RGB start = newRGB(0, 0, 255);
+    RGB end = newRGB(255, 0, 0);
     //printf("\033[2J");
     printf("\033[%uA", frame->height + 1);
     for (int y = 0; y < frame->height; ++y) {
@@ -128,20 +123,9 @@ void displayframe(struct frame *frame) {
     fflush(stdout);
 }
 
-struct world {
-
-    int width, height;
-
-    struct frame *accelerations;
-    struct frame *velocities;
-    struct frame *positions;
-
-    struct frame *output;
-};
-
-void displayworld(struct world *world) {
-    struct RGB start = newRGB(0, 0, 255);
-    struct RGB end = newRGB(255, 0, 0);
+void displayworld(world *world) {
+    RGB start = newRGB(0, 0, 255);
+    RGB end = newRGB(255, 0, 0);
     //printf("\033[2J");
     printf("\033[%uA", world->output->height + 1);
     for (int y = 0; y < world->output->height; ++y) {
@@ -161,10 +145,11 @@ void displayworld(struct world *world) {
     fflush(stdout);
 }
 
-void displaysigmoidframe(struct frame *frame) {
-    struct RGB start = newRGB(0, 0, 255);
-    struct RGB end = newRGB(255, 0, 0);
+void displaysigmoidframe(frame *frame) {
+    RGB start = newRGB(0, 0, 255);
+    RGB end = newRGB(255, 0, 0);
     //printf("\033[2J");
+    printf("\033[%uA", frame->height + 1);
     for (int y = 0; y < frame->height; ++y) {
         for (int x = 0; x < frame->width; ++x) {
             outputcell(interpolatecolor(start, end, 255 * sigmoid(frame_read(frame, x, y, 0.0f))));
@@ -174,41 +159,9 @@ void displaysigmoidframe(struct frame *frame) {
     fflush(stdout);
 }
 
-void world_kill(struct world *world) {
+// Actual Physics
 
-    if (world->accelerations) frame_kill(world->accelerations);
-    if (world->velocities) frame_kill(world->velocities);
-    if (world->positions) frame_kill(world->positions);
-    if (world->output) frame_kill(world->output);
-    free(world);
-}
-
-struct world *world_init(int width, int height) {
-
-    struct world *world = (struct world *) malloc(sizeof(struct world));
-    if (world == NULL)
-        return world;
-
-    world->width = width;
-    world->height = height;
-
-    world->accelerations = frame_init(width, height);
-    world->velocities = frame_init(width, height);
-    world->positions = frame_init(width, height);
-    world->output = frame_init(width, height);
-
-    if ((world->accelerations == NULL) ||
-        (world->velocities == NULL) ||
-        (world->positions == NULL) ||
-        (world->output == NULL)) {
-        world_kill(world);
-        return NULL;
-    }
-
-    return world;
-}
-
-void update_output(struct frame *pos, struct frame *output) {
+void update_output(frame *pos, frame *output) {
 
     for (int y = 0; y < output->height; y++) {
         for (int x = 0; x < output->width; x++) {
@@ -218,7 +171,7 @@ void update_output(struct frame *pos, struct frame *output) {
     }
 }
 
-void update_accelerations(struct frame *pos, struct frame *accels) {
+void update_accelerations(frame *pos, frame *accels) {
     // for (int y = 0; y < accels->height; y++) {
     //     for (int x = 0; x < accels->width; x++) {
 
@@ -280,7 +233,7 @@ void update_accelerations(struct frame *pos, struct frame *accels) {
     }
 }
 
-void update_velocities(struct frame *accels, struct frame *vels, float delta) {
+void update_velocities(frame *accels, frame *vels, float delta) {
 
     for (int y = 0; y < vels->height; y++) {
         for (int x = 0; x < vels->width; x++) {
@@ -290,7 +243,7 @@ void update_velocities(struct frame *accels, struct frame *vels, float delta) {
     }
 }
 
-void update_positions(struct frame *vels, struct frame *pos, float delta) {
+void update_positions(frame *vels, frame *pos, float delta) {
 
     for (int y = 0; y < pos->height; y++) {
         for (int x = 0; x < pos->width; x++) {
@@ -300,7 +253,43 @@ void update_positions(struct frame *vels, struct frame *pos, float delta) {
     }
 }
 
-void world_tick(struct world *world, float delta) {
+// World shit
+
+void world_kill(world *world) {
+
+    if (world->accelerations) frame_kill(world->accelerations);
+    if (world->velocities) frame_kill(world->velocities);
+    if (world->positions) frame_kill(world->positions);
+    if (world->output) frame_kill(world->output);
+    free(world);
+}
+
+world *world_init(int width, int height) {
+
+    world *world = (struct world *) malloc(sizeof(world));
+    if (world == NULL)
+        return world;
+
+    world->width = width;
+    world->height = height;
+
+    world->accelerations = frame_init(width, height);
+    world->velocities = frame_init(width, height);
+    world->positions = frame_init(width, height);
+    world->output = frame_init(width, height);
+
+    if ((world->accelerations == NULL) ||
+        (world->velocities == NULL) ||
+        (world->positions == NULL) ||
+        (world->output == NULL)) {
+        world_kill(world);
+        return NULL;
+    }
+
+    return world;
+}
+
+void world_tick(world *world, float delta) {
 
     update_accelerations(world->positions, world->accelerations);
     update_velocities(world->accelerations, world->velocities, delta);
@@ -308,54 +297,27 @@ void world_tick(struct world *world, float delta) {
     update_output(world->positions, world->output);
 }
 
-struct frame *world_output(struct world *world) {
-    return world->output;
-}
-
-void print_world(struct world *world) {
-
-    //struct frame *output = world_output(world);
-    // TODO: gracey
-    // displaysigmoidframe(world->accelerations);
-    // displaysigmoidframe(world->velocities);
-    // displayframe(output);
+void print_world(world *world) {
     displayframe(world->output);
     printf("\n");
-    // struct frame *output = world_output(world);
-    // for (int y = 0; y < output->height; y++) {
-    //     for (int x = 0; x < output->width; x++) {
-    //         int index = y * output->width + x;
-    //         float value = output->values[index];
-    //         if (value < 0.2)
-    //             putc(' ', stdout);
-    //         else if (value < 0.4)
-    //             putc('.', stdout);
-    //         else if (value < 0.6)
-    //             putc('o', stdout);
-    //         else if (value < 0.8)
-    //             putc('O', stdout);
-    //         else
-    //             putc('@', stdout);
-    //     }
-    //     putc('\n', stdout);
-    // }
-    // putc('\n', stdout);
-}
-
-float max(float x, float y) {
-    if (x > y) {
-        return x;
-    } else {
-        return y;
-    }
 }
 
 int main(int argc, char *argv[]) {
+    int width, height;
+    width = 119;
+    height = 55;
+    if (argc == 3) {
+        sscanf(argv[1], "%d", &width);
+        sscanf(argv[2], "%d", &height);
+    }
 
-    struct world *world = world_init(119, 55);
+    world *world = world_init(119, 55);
     if (world == NULL)
         return -1;
 
+    // Initialise the state here!
+
+    // Nice wave around 15, 27
     for (int i = -6; i <= 6; ++i) {
         for (int j = -6; j <= 6; ++j) {
             // if (i == 0 && j == 0)
@@ -364,6 +326,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Wall of wave at x=15
     // for (int i = -6; i <= 6; ++i) {
     //     for (int y = 0; y <= 54; ++y) {
     //         // if (i == 0 && j == 0)
@@ -372,6 +335,7 @@ int main(int argc, char *argv[]) {
     //     }
     // }
 
+    // Two boxes of 2.0f around 12, 17 and 12, 37
     // for (int x = 10; x <= 14; x++) {
     //     for (int y = 15; y <= 19; y++) {
     //         frame_write(world->positions, x, y, 2.0f);
@@ -382,19 +346,23 @@ int main(int argc, char *argv[]) {
     //         frame_write(world->positions, x, y, 2.0f);
     //     }
     // }
-    //world->positions->values[0] = 100;
+
+    // Clear screen, then initialise vbuf so it won't shake so much
 
     printf("\033[2J");
-    stdoutsetvbuf(50*11*100);
+    stdoutsetvbuf(width*height*100);
 
+    // Display the initial state
     update_output(world->positions, world->output);
     print_world(world);
+    // Tick and display state
     for (int i = 0; i < 1000000; i++) {
         world_tick(world, 1);
         print_world(world);
         //usleep(30 * 1000);
     }
 
+    // Clean up and die
     world_kill(world);
 
     return 0;
