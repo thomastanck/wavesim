@@ -17,21 +17,21 @@ float max(float x, float y) {
 
 // Structs
 
-typedef struct frame {
+typedef struct Frame {
     int width, height;
     float values[];
-} frame;
+} Frame;
 
-typedef struct world {
+typedef struct World {
 
     int width, height;
 
-    frame *accelerations;
-    frame *velocities;
-    frame *positions;
+    Frame *accelerations;
+    Frame *velocities;
+    Frame *positions;
 
-    frame *output;
-} world;
+    Frame *output;
+} World;
 
 typedef struct RGB {
     unsigned char r;
@@ -41,8 +41,8 @@ typedef struct RGB {
 
 // Frame shit
 
-frame *frame_init(int width, int height) {
-    frame *frame = (struct frame *) calloc(sizeof(frame) + sizeof(float) * width * height, sizeof(char));
+Frame *frame_init(int width, int height) {
+    Frame *frame = (Frame *) calloc(sizeof(frame) + sizeof(float) * width * height, sizeof(char));
     if (frame == NULL)
         return frame;
 
@@ -52,23 +52,23 @@ frame *frame_init(int width, int height) {
     return frame;
 }
 
-void frame_kill(frame *frame) {
+void frame_kill(Frame *frame) {
     free(frame);
 }
 
 // 'safe' read/write functions.
-int out_of_frame(frame *frame, int x, int y) {
+int out_of_frame(Frame *frame, int x, int y) {
     return (x < 0) || (x >= frame->width) || (y < 0) || (y >= frame->height);
 }
 
-float frame_read(frame *frame, int x, int y, float def) {
+float frame_read(Frame *frame, int x, int y, float def) {
     if ((x < 0) || (x >= frame->width) || (y < 0) || (y >= frame->height))
         return def;
 
     return frame->values[frame->width * y + x];
 }
 
-void frame_write(frame *frame, int x, int y, float value) {
+void frame_write(Frame *frame, int x, int y, float value) {
     if ((x < 0) || (x >= frame->width) || (y < 0) || (y >= frame->height))
         return;
 
@@ -109,7 +109,7 @@ void outputcell(RGB color) {
     printf("\033[48;2;%u;%u;%u;m  \033[0m", color.r, color.g, color.b);
 }
 
-void displayframe(frame *frame) {
+void displayframe(Frame *frame) {
     RGB start = newRGB(0, 0, 255);
     RGB end = newRGB(255, 0, 0);
     //printf("\033[2J");
@@ -123,7 +123,7 @@ void displayframe(frame *frame) {
     fflush(stdout);
 }
 
-void displayworld(world *world) {
+void displayworld(World *world) {
     RGB start = newRGB(0, 0, 255);
     RGB end = newRGB(255, 0, 0);
     //printf("\033[2J");
@@ -145,7 +145,7 @@ void displayworld(world *world) {
     fflush(stdout);
 }
 
-void displaysigmoidframe(frame *frame) {
+void displaysigmoidframe(Frame *frame) {
     RGB start = newRGB(0, 0, 255);
     RGB end = newRGB(255, 0, 0);
     //printf("\033[2J");
@@ -161,7 +161,7 @@ void displaysigmoidframe(frame *frame) {
 
 // Actual Physics
 
-void update_output(frame *pos, frame *output) {
+void update_output(Frame *pos, Frame *output) {
 
     for (int y = 0; y < output->height; y++) {
         for (int x = 0; x < output->width; x++) {
@@ -171,7 +171,7 @@ void update_output(frame *pos, frame *output) {
     }
 }
 
-void update_accelerations(frame *pos, frame *accels) {
+void update_accelerations(Frame *pos, Frame *accels) {
     // for (int y = 0; y < accels->height; y++) {
     //     for (int x = 0; x < accels->width; x++) {
 
@@ -233,7 +233,7 @@ void update_accelerations(frame *pos, frame *accels) {
     }
 }
 
-void update_velocities(frame *accels, frame *vels, float delta) {
+void update_velocities(Frame *accels, Frame *vels, float delta) {
 
     for (int y = 0; y < vels->height; y++) {
         for (int x = 0; x < vels->width; x++) {
@@ -243,7 +243,7 @@ void update_velocities(frame *accels, frame *vels, float delta) {
     }
 }
 
-void update_positions(frame *vels, frame *pos, float delta) {
+void update_positions(Frame *vels, Frame *pos, float delta) {
 
     for (int y = 0; y < pos->height; y++) {
         for (int x = 0; x < pos->width; x++) {
@@ -255,7 +255,7 @@ void update_positions(frame *vels, frame *pos, float delta) {
 
 // World shit
 
-void world_kill(world *world) {
+void world_kill(World *world) {
 
     if (world->accelerations) frame_kill(world->accelerations);
     if (world->velocities) frame_kill(world->velocities);
@@ -264,9 +264,9 @@ void world_kill(world *world) {
     free(world);
 }
 
-world *world_init(int width, int height) {
+World *world_init(int width, int height) {
 
-    world *world = (struct world *) malloc(sizeof(world));
+    World *world = (World *) malloc(sizeof(world));
     if (world == NULL)
         return world;
 
@@ -289,7 +289,7 @@ world *world_init(int width, int height) {
     return world;
 }
 
-void world_tick(world *world, float delta) {
+void world_tick(World *world, float delta) {
 
     update_accelerations(world->positions, world->accelerations);
     update_velocities(world->accelerations, world->velocities, delta);
@@ -297,7 +297,7 @@ void world_tick(world *world, float delta) {
     update_output(world->positions, world->output);
 }
 
-void print_world(world *world) {
+void print_world(World *world) {
     displayframe(world->output);
     printf("\n");
 }
@@ -311,7 +311,7 @@ int main(int argc, char *argv[]) {
         sscanf(argv[2], "%d", &height);
     }
 
-    world *world = world_init(119, 55);
+    World *world = world_init(119, 55);
     if (world == NULL)
         return -1;
 
