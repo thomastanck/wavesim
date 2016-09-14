@@ -1,9 +1,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include <unistd.h>
+#include <unistd.h> // For usleep
+#include <time.h>
+
+#include <opencv/cv.h>
+#include <opencv/highgui.h>
 
 #define MAX_REACH 1
+#define ZOOM 2
 
 // Utils
 
@@ -109,18 +114,32 @@ void outputcell(RGB color) {
     printf("\033[48;2;%u;%u;%u;m  \033[0m", color.r, color.g, color.b);
 }
 
+CvMat *mat;
+
 void displayframe(Frame *frame) {
-    RGB start = newRGB(0, 0, 255);
-    RGB end = newRGB(255, 0, 0);
-    //printf("\033[2J");
-    printf("\033[%uA", frame->height + 1);
     for (int y = 0; y < frame->height; ++y) {
         for (int x = 0; x < frame->width; ++x) {
-            outputcell(interpolatecolor(start, end, 255 * frame_read(frame, x, y, 0.0f)));
+            for (int yz = 0; yz < ZOOM; ++yz) {
+                for (int xz = 0; xz < ZOOM; ++xz) {
+                    mat->data.ptr[(y*ZOOM+yz)*frame->width*ZOOM+x*ZOOM+xz] = (unsigned char) 255 * frame_read(frame, x, y, 0.0f);
+                }
+            }
         }
-        printf("\n");
     }
-    fflush(stdout);
+    cvShowImage( "Display window", mat );
+    cvWaitKey(1);
+    return;
+    // RGB start = newRGB(0, 0, 255);
+    // RGB end = newRGB(255, 0, 0);
+    // //printf("\033[2J");
+    // printf("\033[%uA", frame->height + 1);
+    // for (int y = 0; y < frame->height; ++y) {
+    //     for (int x = 0; x < frame->width; ++x) {
+    //         outputcell(interpolatecolor(start, end, 255 * frame_read(frame, x, y, 0.0f)));
+    //     }
+    //     printf("\n");
+    // }
+    // fflush(stdout);
 }
 
 void displayworld(World *world) {
@@ -299,30 +318,34 @@ void world_tick(World *world, float delta) {
 
 void print_world(World *world) {
     displayframe(world->output);
-    printf("\n");
+    // printf("\n");
 }
 
 int main(int argc, char *argv[]) {
     int width, height;
-    width = 119;
-    height = 55;
+    width = 200;
+    height = 200;
     if (argc == 3) {
         sscanf(argv[1], "%d", &width);
         sscanf(argv[2], "%d", &height);
     }
 
-    World *world = world_init(119, 55);
+    // Window stuff
+    mat = cvCreateMat(height*ZOOM, width*ZOOM, CV_8UC1);
+    cvNamedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+
+    World *world = world_init(width, height);
     if (world == NULL)
         return -1;
 
     // Initialise the state here!
 
-    // Nice wave around 15, 27
+    // Nice wave around 20, 10
     for (int i = -6; i <= 6; ++i) {
         for (int j = -6; j <= 6; ++j) {
             // if (i == 0 && j == 0)
             //     continue;
-            frame_write(world->positions, 15+i, 27+j, 3*(1+cos(max(-3.14159265358979, -sqrt(i * i + j * j)/2))));
+            frame_write(world->positions, 20+i, 10+j, 3*(1+cos(max(-3.14159265358979, -sqrt(i * i + j * j)/2))));
         }
     }
 
@@ -349,21 +372,30 @@ int main(int argc, char *argv[]) {
 
     // Clear screen, then initialise vbuf so it won't shake so much
 
-    printf("\033[2J");
-    stdoutsetvbuf(width*height*100);
+    // printf("\033[2J");
+    // stdoutsetvbuf(width*height*100);
+
+    float fps = 30;
+    clock_t nextframe = clock();
 
     // Display the initial state
     update_output(world->positions, world->output);
     print_world(world);
-    // Tick and display state
     for (int i = 0; i < 1000000; i++) {
+        // Driving sine wave at 15, 27 (wavelength 24)
+        // frame_write(world->positions, 15, 27, 2.0f*sin((float)i*3.14159265358979/24));
+
+        // Tick and display state
         world_tick(world, 1);
-        print_world(world);
-        //usleep(30 * 1000);
+        if (clock() > nextframe) {
+            nextframe = clock() + CLOCKS_PER_SEC / fps;
+            print_world(world);
+        }
     }
 
     // Clean up and die
     world_kill(world);
+    cvReleaseMat(&mat);
 
     return 0;
 }

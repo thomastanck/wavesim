@@ -1,2 +1,2 @@
 all:
-	gcc --std=c99 -lm main.c -o wavesim
+	gcc --std=c99 -lm `pkg-config --libs opencv` main.c -o wavesim
