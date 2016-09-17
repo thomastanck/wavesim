@@ -38,8 +38,6 @@ typedef struct World {
     Frame *dampaccelerations;
     Frame *dampvelocities;
     Frame *damppositions;
-
-    Frame *output;
 } World;
 
 typedef struct RGB {
@@ -131,12 +129,12 @@ void displayframe(Frame *frame) {
         for (int x = 0; x < frame->width; ++x) {
             for (int yz = 0; yz < ZOOM; ++yz) {
                 for (int xz = 0; xz < ZOOM; ++xz) {
-                    mat->data.ptr[(y*ZOOM+yz)*frame->width*ZOOM+x*ZOOM+xz] = (unsigned char) 255 * frame_read(frame, x, y, 0.0f);
+                    mat->data.ptr[(y*ZOOM+yz)*frame->width*ZOOM+x*ZOOM+xz] = (unsigned char) 255 * sigmoid(frame_read(frame, x, y, 0.0f));
                 }
             }
         }
     }
-    cvShowImage( "Display window", mat );
+    cvShowImage("wavesim", mat);
     cvWaitKey(1);
     return;
     // RGB start = newRGB(0, 0, 255);
@@ -145,7 +143,7 @@ void displayframe(Frame *frame) {
     // printf("\033[%uA", frame->height + 1);
     // for (int y = 0; y < frame->height; ++y) {
     //     for (int x = 0; x < frame->width; ++x) {
-    //         outputcell(interpolatecolor(start, end, 255 * frame_read(frame, x, y, 0.0f)));
+    //         outputcell(interpolatecolor(start, end, 255 * sigmoid(frame_read(frame, x, y, 0.0f))));
     //     }
     //     printf("\n");
     // }
@@ -156,10 +154,10 @@ void displayworld(World *world) {
     RGB start = newRGB(0, 0, 255);
     RGB end = newRGB(255, 0, 0);
     //printf("\033[2J");
-    printf("\033[%uA", world->output->height + 1);
-    for (int y = 0; y < world->output->height; ++y) {
-        for (int x = 0; x < world->output->width; ++x) {
-            outputcell(interpolatecolor(start, end, 255 * frame_read(world->output, x, y, 0.0f)));
+    printf("\033[%uA", world->positions->height + 1);
+    for (int y = 0; y < world->positions->height; ++y) {
+        for (int x = 0; x < world->positions->width; ++x) {
+            outputcell(interpolatecolor(start, end, 255 * sigmoid(frame_read(world->positions, x, y, 0.0f))));
         }
         printf(" ");
         for (int x = 0; x < world->velocities->width; ++x) {
@@ -174,31 +172,7 @@ void displayworld(World *world) {
     fflush(stdout);
 }
 
-void displaysigmoidframe(Frame *frame) {
-    RGB start = newRGB(0, 0, 255);
-    RGB end = newRGB(255, 0, 0);
-    //printf("\033[2J");
-    printf("\033[%uA", frame->height + 1);
-    for (int y = 0; y < frame->height; ++y) {
-        for (int x = 0; x < frame->width; ++x) {
-            outputcell(interpolatecolor(start, end, 255 * sigmoid(frame_read(frame, x, y, 0.0f))));
-        }
-        printf("\n");
-    }
-    fflush(stdout);
-}
-
 // Actual Physics
-
-void update_output(Frame *pos, Frame *output) {
-
-    for (int y = 0; y < output->height; y++) {
-        for (int x = 0; x < output->width; x++) {
-            int index = y * output->width + x;
-            output->values[index] = sigmoid(pos->values[index]);
-        }
-    }
-}
 
 void update_accelerations(Frame *pos, Frame *accels, Frame *dampaccels) {
     // for (int y = 0; y < accels->height; y++) {
@@ -299,7 +273,6 @@ void world_kill(World *world) {
     if (world->accelerations) frame_kill(world->accelerations);
     if (world->velocities) frame_kill(world->velocities);
     if (world->positions) frame_kill(world->positions);
-    if (world->output) frame_kill(world->output);
     free(world);
 }
 
@@ -375,12 +348,9 @@ World *world_init(int width, int height) {
         }
     }
 
-    world->output = frame_init(width, height);
-
     if ((world->accelerations == NULL) ||
         (world->velocities == NULL) ||
-        (world->positions == NULL) ||
-        (world->output == NULL)) {
+        (world->positions == NULL)) {
         world_kill(world);
         return NULL;
     }
@@ -393,11 +363,10 @@ void world_tick(World *world, float delta) {
     update_accelerations(world->positions, world->accelerations, world->dampaccelerations);
     update_velocities(world->accelerations, world->velocities, world->dampvelocities, delta);
     update_positions(world->velocities, world->positions, world->damppositions, delta);
-    update_output(world->positions, world->output);
 }
 
 void print_world(World *world) {
-    displayframe(world->output);
+    displayframe(world->positions);
     // printf("\n");
 }
 
@@ -412,7 +381,7 @@ int main(int argc, char *argv[]) {
 
     // Window stuff
     mat = cvCreateMat(height*ZOOM, width*ZOOM, CV_8UC1);
-    cvNamedWindow( "Display window", CV_WINDOW_AUTOSIZE );// Create a window for display.
+    cvNamedWindow("wavesim", CV_WINDOW_AUTOSIZE); // Create a window for display.
 
     World *world = world_init(width, height);
     if (world == NULL)
@@ -459,7 +428,6 @@ int main(int argc, char *argv[]) {
     clock_t nextframe = clock();
 
     // Display the initial state
-    update_output(world->positions, world->output);
     print_world(world);
     for (int i = 0; i < 1000000; i++) {
         // Tick and display state
@@ -467,11 +435,8 @@ int main(int argc, char *argv[]) {
 
         // Weird driving waves for fun and profit
         // frame_write(world->positions, 158, 153, 2.0f*sin((float)i*3.14159265358979/44)*sin((float)i*3.14159265358979/413)*cos((float)i*3.14159265358979/4859));
-        // frame_write(world->output, 158, 153, sigmoid(frame_read(world->positions, 158, 153, 0.0)));
         // frame_write(world->positions, 27, 27, 4.0f*sin((float)i*3.14159265358979/24)*sin((float)i*3.14159265358979/300)*cos((float)i*3.14159265358979/4800));
-        // frame_write(world->output, 27, 27, sigmoid(frame_read(world->positions, 27, 27, 0.0)));
         frame_write(world->positions, 55, 80, 4.0f*sin((float)i*3.14159265358979/24));
-        frame_write(world->output, 55, 80, sigmoid(frame_read(world->positions, 55, 80, 0.0)));
         if (clock() > nextframe) {
             nextframe = clock() + CLOCKS_PER_SEC / fps;
             print_world(world);
