@@ -28,16 +28,25 @@ typedef struct Frame {
     float values[];
 } Frame;
 
+typedef void (*StateCallback)(Frame *, float); // position Frame, time
+typedef StateCallback Source;
+typedef StateCallback Mic; // We may want to give Source and Mic different prototypes in the future
+
 typedef struct World {
     int width, height;
+    float time;
 
     Frame *accelerations;
     Frame *velocities;
     Frame *positions;
 
-    Frame *dampaccelerations;
-    Frame *dampvelocities;
-    Frame *damppositions;
+    Frame *dampaccelerations; // walls/refraction
+    Frame *dampvelocities;    // damping
+    Frame *damppositions;     // walls
+
+    int num_sources, num_mics;
+    Source *sources;
+    Mic *mics;
 } World;
 
 typedef struct RGB {
@@ -174,11 +183,11 @@ void displayworld(World *world) {
 
 // Actual Physics
 
-void update_accelerations(Frame *pos, Frame *accels, Frame *dampaccels) {
-    // for (int y = 0; y < accels->height; y++) {
-    //     for (int x = 0; x < accels->width; x++) {
+void update_accelerations(World *world) {
+    // for (int y = 0; y < world->accelerations->height; y++) {
+    //     for (int x = 0; x < world->accelerations->width; x++) {
 
-    //         float src = frame_read(pos, x, y, 0.0);
+    //         float src = frame_read(world->positions, x, y, 0.0);
 
     //         float accel = 0;
     //         float norm = 0;
@@ -187,35 +196,35 @@ void update_accelerations(Frame *pos, Frame *accels, Frame *dampaccels) {
 
     //                 if (i == 0 && j == 0)
     //                     continue;
-    //                 if (out_of_frame(pos, x+i, y+j))
+    //                 if (out_of_frame(world->positions, x+i, y+j))
     //                     continue;
 
     //                 float distance = (i * i + j * j); // (L2 dist) ^ 2
 
-    //                 float diff = frame_read(pos, x+i, y+j, 0.0) - src;
+    //                 float diff = frame_read(world->positions, x+i, y+j, 0.0) - src;
     //                 accel += diff / distance;
     //                 norm += distance;
     //             }
     //         }
 
-    //         frame_write(accels, x, y, accel * norm);
+    //         frame_write(world->accelerations, x, y, accel * norm);
     //     }
     // }
-    for (int y = 0; y < accels->height; y++) {
-        for (int x = 0; x < accels->width; x++) {
-            frame_write(accels, x, y, 0);
+    for (int y = 0; y < world->accelerations->height; y++) {
+        for (int x = 0; x < world->accelerations->width; x++) {
+            frame_write(world->accelerations, x, y, 0);
         }
     }
-    for (int y = 0; y < pos->height; y++) {
-        for (int x = 0; x < pos->width; x++) {
-            float src = frame_read(pos, x, y, 0.0);
+    for (int y = 0; y < world->positions->height; y++) {
+        for (int x = 0; x < world->positions->width; x++) {
+            float src = frame_read(world->positions, x, y, 0.0);
 
             float norm = 0;
             for (int j = - MAX_REACH; j <= MAX_REACH; j++) {
                 for (int i = - MAX_REACH; i <= MAX_REACH; i++) {
                     if (i == 0 && j == 0)
                         continue;
-                    if (out_of_frame(pos, x+i, y+j))
+                    if (out_of_frame(world->positions, x+i, y+j))
                         continue;
                     float distance = (i * i + j * j); // (L2 dist) ^ 2
                     norm += 1.0 / distance;
@@ -225,43 +234,41 @@ void update_accelerations(Frame *pos, Frame *accels, Frame *dampaccels) {
                 for (int i = - MAX_REACH; i <= MAX_REACH; i++) {
                     if (i == 0 && j == 0)
                         continue;
-                    if (out_of_frame(pos, x+i, y+j))
+                    if (out_of_frame(world->positions, x+i, y+j))
                         continue;
                     float distance = (i * i + j * j); // (L2 dist) ^ 2
-                    float diff = frame_read(pos, x+i, y+j, 0.0) - src;
-                    accels->values[accels->width * y + x] += diff / distance / norm;// * dampaccels->values[accels->width * (y+j) + (x+i)];
-                    // int boundary_dist = dist_from_boundary(pos, x, y);
+                    float diff = frame_read(world->positions, x+i, y+j, 0.0) - src;
+                    world->accelerations->values[world->accelerations->width * y + x] += diff / distance / norm;// * world->dampaccelerations->values[world->dampaccelerations->width * (y+j) + (x+i)];
+                    // int boundary_dist = dist_from_boundary(world->positions, x, y);
                     // boundary_dist = 4;
                     // if (boundary_dist <= 3) {
-                    //     accels->values[accels->width * y + x] += diff / distance / norm * (boundary_dist + 1) / 4;
+                    //     world->accelerations->values[world->accelerations->width * y + x] += diff / distance / norm * (boundary_dist + 1) / 4;
                     // } else {
-                    //     accels->values[accels->width * y + x] += diff / distance / norm;
+                    //     world->accelerations->values[world->accelerations->width * y + x] += diff / distance / norm;
                     // }
                 }
             }
-            accels->values[accels->width * y + x] *= dampaccels->values[accels->width * y + x];
+            world->accelerations->values[world->accelerations->width * y + x] *= world->dampaccelerations->values[world->dampaccelerations->width * y + x];
         }
     }
 }
 
-void update_velocities(Frame *accels, Frame *vels, Frame *dampvels, float delta) {
-
-    for (int y = 0; y < vels->height; y++) {
-        for (int x = 0; x < vels->width; x++) {
-            int index = y * vels->width + x;
-            vels->values[index] += delta * accels->values[index];
-            vels->values[index] *= pow(dampvels->values[index], delta);
+void update_velocities(World *world, float delta) {
+    for (int y = 0; y < world->velocities->height; y++) {
+        for (int x = 0; x < world->velocities->width; x++) {
+            int index = y * world->velocities->width + x;
+            world->velocities->values[index] += delta * world->accelerations->values[index];
+            world->velocities->values[index] *= pow(world->dampvelocities->values[index], delta);
         }
     }
 }
 
-void update_positions(Frame *vels, Frame *pos, Frame *damppos, float delta) {
-
-    for (int y = 0; y < pos->height; y++) {
-        for (int x = 0; x < pos->width; x++) {
-            int index = y * pos->width + x;
-            pos->values[index] += delta * vels->values[index];
-            pos->values[index] *= pow(damppos->values[index], delta);
+void update_positions(World *world, float delta) {
+    for (int y = 0; y < world->positions->height; y++) {
+        for (int x = 0; x < world->positions->width; x++) {
+            int index = y * world->positions->width + x;
+            world->positions->values[index] += delta * world->velocities->values[index];
+            world->positions->values[index] *= pow(world->damppositions->values[index], delta);
         }
     }
 }
@@ -269,7 +276,6 @@ void update_positions(Frame *vels, Frame *pos, Frame *damppos, float delta) {
 // World shit
 
 void world_kill(World *world) {
-
     if (world->accelerations) frame_kill(world->accelerations);
     if (world->velocities) frame_kill(world->velocities);
     if (world->positions) frame_kill(world->positions);
@@ -277,13 +283,14 @@ void world_kill(World *world) {
 }
 
 World *world_init(int width, int height) {
-
     World *world = (World *) malloc(sizeof(world));
     if (world == NULL)
         return world;
 
     world->width = width;
     world->height = height;
+
+    world->time = 0;
 
     world->accelerations = frame_init(width, height);
     world->velocities = frame_init(width, height);
@@ -297,8 +304,8 @@ World *world_init(int width, int height) {
         for (int x = 0; x < width; x++) {
             int index = y * width + x;
             world->dampaccelerations->values[index] = 1; // walls/refraction
-            world->dampvelocities->values[index] = 1;
-            world->damppositions->values[index] = 1; // walls
+            world->dampvelocities->values[index] = 1;    // damping
+            world->damppositions->values[index] = 1;     // walls
 
             // Boundary damping
             int boundary_dist = dist_from_boundary(world->dampvelocities, x, y);
@@ -359,10 +366,10 @@ World *world_init(int width, int height) {
 }
 
 void world_tick(World *world, float delta) {
-
-    update_accelerations(world->positions, world->accelerations, world->dampaccelerations);
-    update_velocities(world->accelerations, world->velocities, world->dampvelocities, delta);
-    update_positions(world->velocities, world->positions, world->damppositions, delta);
+    update_accelerations(world);
+    update_velocities(world, delta);
+    update_positions(world, delta);
+    world->time += delta;
 }
 
 void print_world(World *world) {
