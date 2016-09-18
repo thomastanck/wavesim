@@ -7,22 +7,14 @@
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 
+#include "mathutils.h"
+
 #define MAX_REACH 1
 #define ZOOM 2
 #define DAMP_SIZE 50
 
 #define PI 3.14159265358979
 #define TAU (2 * PI)
-
-// Utils
-
-float sigmoid(float x) {
-    return 1 / (1+exp(-x));
-}
-
-// Already defined in opencv
-// #define MAX(x, y) ((x) > (y) ? (x) : (y))
-// #define MIN(x, y) ((x) < (y) ? (x) : (y))
 
 // Structs
 
@@ -160,7 +152,7 @@ void displayframe(Frame *frame) {
         for (int x = 0; x < frame->width; ++x) {
             for (int yz = 0; yz < ZOOM; ++yz) {
                 for (int xz = 0; xz < ZOOM; ++xz) {
-                    mat->data.ptr[(y*ZOOM+yz)*frame->width*ZOOM+x*ZOOM+xz] = (unsigned char) 255 * sigmoid(frame_read(frame, x, y, 0.0f));
+                    mat->data.ptr[(y*ZOOM+yz)*frame->width*ZOOM+x*ZOOM+xz] = (unsigned char) 255 * SIGMOID(frame_read(frame, x, y, 0.0f));
                 }
             }
         }
@@ -174,7 +166,7 @@ void displayframe(Frame *frame) {
     // printf("\033[%uA", frame->height + 1);
     // for (int y = 0; y < frame->height; ++y) {
     //     for (int x = 0; x < frame->width; ++x) {
-    //         outputcell(interpolatecolor(start, end, 255 * sigmoid(frame_read(frame, x, y, 0.0f))));
+    //         outputcell(interpolatecolor(start, end, 255 * SIGMOID(frame_read(frame, x, y, 0.0f))));
     //     }
     //     printf("\n");
     // }
@@ -188,15 +180,15 @@ void displayworld(World *world) {
     printf("\033[%uA", world->positions->height + 1);
     for (int y = 0; y < world->positions->height; ++y) {
         for (int x = 0; x < world->positions->width; ++x) {
-            outputcell(interpolatecolor(start, end, 255 * sigmoid(frame_read(world->positions, x, y, 0.0f))));
+            outputcell(interpolatecolor(start, end, 255 * SIGMOID(frame_read(world->positions, x, y, 0.0f))));
         }
         printf(" ");
         for (int x = 0; x < world->velocities->width; ++x) {
-            outputcell(interpolatecolor(start, end, 255 * sigmoid(frame_read(world->velocities, x, y, 0.0f) / 3)));
+            outputcell(interpolatecolor(start, end, 255 * SIGMOID(frame_read(world->velocities, x, y, 0.0f) / 3)));
         }
         printf(" ");
         for (int x = 0; x < world->accelerations->width; ++x) {
-            outputcell(interpolatecolor(start, end, 255 * sigmoid(frame_read(world->accelerations, x, y, 0.0f) / MAX_REACH / MAX_REACH / 3)));
+            outputcell(interpolatecolor(start, end, 255 * SIGMOID(frame_read(world->accelerations, x, y, 0.0f) / MAX_REACH / MAX_REACH / 3)));
         }
         printf("\n");
     }
