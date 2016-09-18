@@ -11,6 +11,9 @@
 #define ZOOM 2
 #define DAMP_SIZE 50
 
+#define PI 3.14159265358979
+#define TAU (2 * PI)
+
 // Utils
 
 float sigmoid(float x) {
@@ -23,16 +26,35 @@ float sigmoid(float x) {
 
 // Structs
 
-typedef struct Frame {
+typedef struct Frame Frame;
+typedef struct World World;
+typedef struct RGB RGB;
+
+typedef void (* StateCallback)(World *, void *); // world, and internal state that the callback can use anyway it wants
+typedef struct Source Source;
+typedef struct Mic Mic;
+
+struct Source {
+    StateCallback callback;
+    void *state; // Internal state passed to callback to be used for any purpose
+    // Some ideas on how state can be used:
+    // - As parameters to generic callback functions (frequency to a generic sine wave generator)
+    // - As a PRNG state that callback can generate noise out of
+    // - Containing a pointer to another Source/Mic to allow for possible middleware shenanigans
+    StateCallback state_kill; // To be called at world_kill. Dellocate state and shit here.
+};
+struct Mic {
+    StateCallback callback;
+    void *state;
+    StateCallback state_kill;
+};
+
+struct Frame {
     int width, height;
     float values[];
-} Frame;
+};
 
-typedef void (*StateCallback)(Frame *, float); // position Frame, time
-typedef StateCallback Source;
-typedef StateCallback Mic; // We may want to give Source and Mic different prototypes in the future
-
-typedef struct World {
+struct World {
     int width, height;
     float time;
 
@@ -47,13 +69,13 @@ typedef struct World {
     int num_sources, num_mics;
     Source *sources;
     Mic *mics;
-} World;
+};
 
-typedef struct RGB {
+struct RGB {
     unsigned char r;
     unsigned char g;
     unsigned char b;
-} RGB;
+};
 
 // Frame shit
 
@@ -279,6 +301,16 @@ void world_kill(World *world) {
     if (world->accelerations) frame_kill(world->accelerations);
     if (world->velocities) frame_kill(world->velocities);
     if (world->positions) frame_kill(world->positions);
+    for (int i = 0; i < world->num_sources; i++) {
+        if (world->sources[i].state_kill != NULL) {
+            world->sources[i].state_kill(world, world->sources[i].state); // Calling function pointer (type Source)
+        }
+    }
+    for (int i = 0; i < world->num_mics; i++) {
+        if (world->mics[i].state_kill != NULL) {
+            world->mics[i].state_kill(world, world->mics[i].state); // Calling function pointer (type Source)
+        }
+    }
     free(world);
 }
 
@@ -355,6 +387,11 @@ World *world_init(int width, int height) {
         }
     }
 
+    world->num_sources = 0;
+    world->num_mics = 0;
+    world->sources = NULL;
+    world->mics = NULL;
+
     if ((world->accelerations == NULL) ||
         (world->velocities == NULL) ||
         (world->positions == NULL)) {
@@ -369,12 +406,64 @@ void world_tick(World *world, float delta) {
     update_accelerations(world);
     update_velocities(world, delta);
     update_positions(world, delta);
+    for (int i = 0; i < world->num_sources; i++) {
+        if (world->sources[i].callback != NULL) {
+            world->sources[i].callback(world, world->sources[i].state); // Calling function pointer (type Source)
+        }
+    }
+    for (int i = 0; i < world->num_mics; i++) {
+        if (world->mics[i].callback != NULL) {
+            world->mics[i].callback(world, world->mics[i].state); // Calling function pointer (type Source)
+        }
+    }
     world->time += delta;
+}
+
+void world_add_source(World *world, Source source) {
+    world->num_sources++;
+    world->sources = realloc(world->sources, world->num_sources * sizeof(Source));
+    world->sources[world->num_sources - 1] = source;
+}
+
+void world_add_mic(World *world, Mic mic) {
+    world->num_mics++;
+    world->mics = realloc(world->mics, world->num_mics * sizeof(Mic));
+    world->mics[world->num_mics - 1] = mic;
 }
 
 void print_world(World *world) {
     displayframe(world->positions);
     // printf("\n");
+}
+
+typedef struct GenericSineWave_state {
+    float frequency, amplitude;
+    int x, y;
+} GenericSineWave_state;
+void GenericSineWave_callback(World *world, void *state_ptr) {
+    GenericSineWave_state *state = (GenericSineWave_state *)state_ptr;
+    float frequency = state->frequency;
+    float amplitude = state->amplitude;
+    int x = state->x;
+    int y = state->y;
+    frame_write(world->positions, x, y, amplitude * sin(world->time * TAU * frequency));
+    // printf("%f\n", world->time);
+    // printf("%d, %d, %f\n", x, y, amplitude * sin(world->time * TAU * frequency));
+}
+void GenericSineWave_state_kill(World *world, void *state) {
+    free(state);
+}
+Source GenericSineWave(float frequency, float amplitude, int x, int y) {
+    Source source;
+    GenericSineWave_state *state = malloc(sizeof(GenericSineWave_state));
+    state->frequency = frequency;
+    state->amplitude = amplitude;
+    state->x = x;
+    state->y = y;
+    source.callback = GenericSineWave_callback;
+    source.state = state;
+    source.state_kill = GenericSineWave_state_kill;
+    return source;
 }
 
 int main(int argc, char *argv[]) {
@@ -426,6 +515,18 @@ int main(int argc, char *argv[]) {
     //     }
     // }
 
+    // GenericSineWave_state state1;
+    // state1.frequency = 1.0/48.0;
+    // state1.amplitude = 4.0;
+    // state1.x = 55;
+    // state1.y = 80;
+    // Source source1;
+    // source1.callback = GenericSineWave_callback;
+    // source1.state = &state1;
+    // source1.state_kill = NULL;
+    Source source1 = GenericSineWave(1.0/48.0, 4.0, 55, 80);
+    world_add_source(world, source1);
+
     // Clear screen, then initialise vbuf so it won't shake so much
 
     // printf("\033[2J");
@@ -443,7 +544,7 @@ int main(int argc, char *argv[]) {
         // Weird driving waves for fun and profit
         // frame_write(world->positions, 158, 153, 2.0f*sin((float)i*3.14159265358979/44)*sin((float)i*3.14159265358979/413)*cos((float)i*3.14159265358979/4859));
         // frame_write(world->positions, 27, 27, 4.0f*sin((float)i*3.14159265358979/24)*sin((float)i*3.14159265358979/300)*cos((float)i*3.14159265358979/4800));
-        frame_write(world->positions, 55, 80, 4.0f*sin((float)i*3.14159265358979/24));
+        // frame_write(world->positions, 55, 80, 4.0f*sin((float)i*3.14159265358979/24));
         if (clock() > nextframe) {
             nextframe = clock() + CLOCKS_PER_SEC / fps;
             print_world(world);
