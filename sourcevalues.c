@@ -6,7 +6,6 @@
 #include "sim.h"
 
 // SineWave
-
 typedef struct SineWave_state {
     float frequency, amplitude, phase;
 } SineWave_state;
@@ -29,7 +28,77 @@ SourceValue SineWave(float frequency, float amplitude, float phase) {
     return sourcevalue;
 }
 
+// SquareWave
+typedef struct SquareWave_state {
+    float period, amplitude, phase;
+} SquareWave_state;
+float SquareWave_callback(void *state_ptr, float time) {
+    SquareWave_state *state = (SquareWave_state *)state_ptr;
+    return fmod(time + state->phase, state->period) > state->period / 2 ? state->amplitude : -state->amplitude;
+}
+void SquareWave_state_kill(void *state_ptr) {
+    free(state_ptr);
+}
+SourceValue SquareWave(float frequency, float amplitude, float phase) {
+    SourceValue sourcevalue;
+    SquareWave_state *state = malloc(sizeof(SquareWave_state));
+    state->period = 1.0 / frequency;
+    state->amplitude = amplitude;
+    state->phase = phase;
+    sourcevalue.callback = SquareWave_callback;
+    sourcevalue.state = state;
+    sourcevalue.state_kill = SquareWave_state_kill;
+    return sourcevalue;
+}
 
+// TriangleWave
+typedef struct TriangleWave_state {
+    float period, amplitude, phase;
+} TriangleWave_state;
+float TriangleWave_callback(void *state_ptr, float time) {
+    TriangleWave_state *state = (TriangleWave_state *)state_ptr;
+    float point = fmod(time + state->phase, state->period) / state->period;
+    return point < 0.5 ? state->amplitude * 4.0 * (point - 0.25) : state->amplitude * 4.0 * (0.75 - point);
+}
+void TriangleWave_state_kill(void *state_ptr) {
+    free(state_ptr);
+}
+SourceValue TriangleWave(float frequency, float amplitude, float phase) {
+    SourceValue sourcevalue;
+    TriangleWave_state *state = malloc(sizeof(TriangleWave_state));
+    state->period = 1.0 / frequency;
+    state->amplitude = amplitude;
+    state->phase = phase;
+    sourcevalue.callback = TriangleWave_callback;
+    sourcevalue.state = state;
+    sourcevalue.state_kill = TriangleWave_state_kill;
+    return sourcevalue;
+}
+
+// SawtoothWave
+typedef struct SawtoothWave_state {
+    float period, amplitude, phase;
+} SawtoothWave_state;
+float SawtoothWave_callback(void *state_ptr, float time) {
+    SawtoothWave_state *state = (SawtoothWave_state *)state_ptr;
+    return state->amplitude * 2.0 * (fmod(time + state->phase, state->period) / state->period - 0.5);
+}
+void SawtoothWave_state_kill(void *state_ptr) {
+    free(state_ptr);
+}
+SourceValue SawtoothWave(float frequency, float amplitude, float phase) {
+    SourceValue sourcevalue;
+    SawtoothWave_state *state = malloc(sizeof(SawtoothWave_state));
+    state->period = 1.0 / frequency;
+    state->amplitude = amplitude;
+    state->phase = phase;
+    sourcevalue.callback = SawtoothWave_callback;
+    sourcevalue.state = state;
+    sourcevalue.state_kill = SawtoothWave_state_kill;
+    return sourcevalue;
+}
+
+// Constant
 typedef float Constant_state;
 float Constant_callback(void *state_ptr, float time) {
     Constant_state *state = (Constant_state *)state_ptr;
@@ -48,7 +117,7 @@ SourceValue Constant(float value) {
     return sourcevalue;
 }
 
-
+// Add
 typedef struct Add_state {
     int num_values;
     SourceValue *values;
@@ -86,7 +155,7 @@ SourceValue Add(int num_values, SourceValue value, ...) {
     return sourcevalue;
 }
 
-
+// Multiply
 typedef struct Multiply_state {
     int num_values;
     SourceValue *values;
@@ -124,7 +193,7 @@ SourceValue Multiply(int num_values, SourceValue value, ...) {
     return sourcevalue;
 }
 
-
+// Invert
 typedef SourceValue Invert_state;
 float Invert_callback(void *state_ptr, float time) {
     Invert_state *value = (Invert_state *)state_ptr;
@@ -145,7 +214,7 @@ SourceValue Invert(SourceValue value) {
     return sourcevalue;
 }
 
-
+// Shift
 typedef struct Shift_state {
     float phase;
     SourceValue value;
