@@ -4,9 +4,12 @@
 typedef struct World World;
 typedef struct Frame Frame;
 
-typedef void (*StateCallback)(World *, void *); // world, and internal state that the callback can use anyway it wants
-typedef void (*ConstStateCallback)(const World *, void *);
+typedef void (*StateCallback)(void *, World *); // void * is a pointer to internal state that the callback can use any way it wants
+typedef void (*ConstStateCallback)(void *, const World *);
+typedef void (*StateKillCallback)(void *);
+typedef float (*SourceValueCallback)(void *, float); // internal state and time
 typedef struct Source Source;
+typedef struct SourceValue SourceValue;
 typedef struct Mic Mic;
 
 struct Source {
@@ -16,12 +19,17 @@ struct Source {
     // - As parameters to generic callback functions (frequency to a generic sine wave generator)
     // - As a PRNG state that callback can generate noise out of
     // - Containing a pointer to another Source/Mic to allow for possible middleware shenanigans
-    ConstStateCallback state_kill; // To be called at world_kill. Dellocate state and shit here.
+    StateKillCallback state_kill; // To be called at world_kill. Dellocate state and shit here.
+};
+struct SourceValue {
+    SourceValueCallback callback;
+    void *state;
+    StateKillCallback state_kill;
 };
 struct Mic {
     ConstStateCallback callback;
     void *state;
-    ConstStateCallback state_kill;
+    StateKillCallback state_kill;
 };
 
 struct Frame {

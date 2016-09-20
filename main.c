@@ -8,6 +8,7 @@
 #include "display.h"
 #include "sim.h"
 #include "sources.h"
+#include "sourcevalues.h"
 
 int main(int argc, char *argv[]) {
     int width, height;
@@ -56,7 +57,7 @@ int main(int argc, char *argv[]) {
     //     }
     // }
 
-    Source source1 = SineWaveSource(1.0/48.0, 4.0, 55, 80);
+    Source source1 = PointSource(55, 80, SineWave(1.0/48.0, 4.0, 0.0));
     world_add_source(world, source1);
 
     // Clear screen, then initialise vbuf so it won't shake so much

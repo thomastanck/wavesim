@@ -149,12 +149,12 @@ void world_kill(World *world) {
     if (world->positions) frame_kill(world->positions);
     for (int i = 0; i < world->num_sources; i++) {
         if (world->sources[i].state_kill != NULL) {
-            world->sources[i].state_kill(world, world->sources[i].state); // Calling function pointer (type Source)
+            world->sources[i].state_kill(world->sources[i].state); // Calling function pointer (type StateKillCallback)
         }
     }
     for (int i = 0; i < world->num_mics; i++) {
         if (world->mics[i].state_kill != NULL) {
-            world->mics[i].state_kill(world, world->mics[i].state); // Calling function pointer (type Source)
+            world->mics[i].state_kill(world->mics[i].state); // Calling function pointer (type StateKillCallback)
         }
     }
     free(world);
@@ -252,12 +252,12 @@ void world_tick(World *world, float delta) {
     update_positions(world, delta);
     for (int i = 0; i < world->num_sources; i++) {
         if (world->sources[i].callback != NULL) {
-            world->sources[i].callback(world, world->sources[i].state); // Calling function pointer (type Source)
+            world->sources[i].callback(world->sources[i].state, world); // Calling function pointer (type StateCallback)
         }
     }
     for (int i = 0; i < world->num_mics; i++) {
         if (world->mics[i].callback != NULL) {
-            world->mics[i].callback(world, world->mics[i].state); // Calling function pointer (type Source)
+            world->mics[i].callback(world->mics[i].state, world); // Calling function pointer (type ConstStateCallback)
         }
     }
     world->time += delta;
