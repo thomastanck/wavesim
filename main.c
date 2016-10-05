@@ -4,7 +4,7 @@
 // #include <unistd.h> // For usleep
 #include <time.h>
 
-// #include "mathutils.h"
+#include "mathutils.h"
 #include "display.h"
 #include "sim.h"
 #include "sources.h"
@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
     //     for (int j = -6; j <= 6; ++j) {
     //         // if (i == 0 && j == 0)
     //         //     continue;
-    //         frame_write(world->positions, 100+i, 100+j, 3*(1+cos(MAX(-3.14159265358979, -sqrt(i * i + j * j)/2))));
+    //         frame_write(world->positions, 50+i, 50+j, 3*(1+cos(MAX(-3.14159265358979, -sqrt(i * i + j * j)/2))));
     //     }
     // }
 
@@ -58,7 +58,9 @@ int main(int argc, char *argv[]) {
     // }
 
     Source source1 = PointSource(55, 80, SineWave(1.0/48.0, 4.0, 0.0));
-    world_add_source(world, source1);
+    Source source2 = RectSource(55, 46, 55, 65, SineWave(1.0/48.0, 1.5, 0.0));
+    Source source3 = RectSource(50, 50, 99, 50, SineWave(1.0/48.0, 1.5, 0.0));
+    world_add_source(world, source3);
 
     // Clear screen, then initialise vbuf so it won't shake so much
 

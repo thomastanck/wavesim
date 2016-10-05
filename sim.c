@@ -50,8 +50,15 @@ void frame_write(Frame *frame, int x, int y, float value) {
 }
 
 // Actual Physics
+void update_accelerations1(World *world);
+void update_accelerations2(World *world);
 
 void update_accelerations(World *world) {
+    // update_accelerations1(world);
+    update_accelerations2(world);
+}
+
+void update_accelerations1(World *world) {
     // for (int y = 0; y < world->accelerations->height; y++) {
     //     for (int x = 0; x < world->accelerations->width; x++) {
 
@@ -117,6 +124,46 @@ void update_accelerations(World *world) {
                 }
             }
             world->accelerations->values[world->accelerations->width * y + x] *= world->dampaccelerations->values[world->dampaccelerations->width * y + x];
+        }
+    }
+}
+
+void update_accelerations2(World *world) {
+    for (int y = 0; y < world->accelerations->height; y++) {
+        for (int x = 0; x < world->accelerations->width; x++) {
+            frame_write(world->accelerations, x, y, 0);
+        }
+    }
+    for (int y = 0; y < world->positions->height; y++) {
+        for (int x = 0; x < world->positions->width; x++) {
+            float src = frame_read(world->positions, x, y, 0.0);
+            float srcdamp = frame_read(world->dampaccelerations, x, y, 0.0);
+
+            float norm = 0;
+            for (int j = - MAX_REACH; j <= MAX_REACH; j++) {
+                for (int i = - MAX_REACH; i <= MAX_REACH; i++) {
+                    if (i == 0 && j == 0)
+                        continue;
+                    if (out_of_frame(world->positions, x+i, y+j))
+                        continue;
+                    float distance = (i * i + j * j); // (L2 dist) ^ 2
+                    norm += frame_read(world->dampaccelerations, x+i, y+j, 0.0) / distance;
+                }
+            }
+            for (int j = - MAX_REACH; j <= MAX_REACH; j++) {
+                for (int i = - MAX_REACH; i <= MAX_REACH; i++) {
+                    int destindex = world->positions->width * (y+j) + (x+i);
+                    if (i == 0 && j == 0)
+                        continue;
+                    if (out_of_frame(world->positions, x+i, y+j))
+                        continue;
+                    float distance = (i * i + j * j); // (L2 dist) ^ 2
+                    float diff = src - frame_read(world->positions, x+i, y+j, 0.0);
+                    world->accelerations->values[destindex] += diff * srcdamp * frame_read(world->dampaccelerations, x+i, y+j, 0.0) / distance / norm;
+                    // world->accelerations->values[world->accelerations->width * y + x] += diff / distance / norm;// * world->dampaccelerations->values[world->dampaccelerations->width * (y+j) + (x+i)];
+                }
+            }
+            // world->accelerations->values[world->accelerations->width * y + x] *= world->dampaccelerations->values[world->dampaccelerations->width * y + x];
         }
     }
 }
@@ -193,9 +240,9 @@ World *world_init(int width, int height) {
             }
 
             // Lloyd's mirror
-            if (y == 50) {
-                world->damppositions->values[index] = 0;
-            }
+            // if (y == 50) {
+            //     world->dampaccelerations->values[index] = 0;
+            // }
 
             // Top fourth is an "optic fibre"
             // if (y > 1 * height / 4 - 5 && y < 1 * height / 4 + 15) {
@@ -211,9 +258,19 @@ World *world_init(int width, int height) {
             // if (x > 2 * width / 5 && x < 3 * width / 5) {
             //     world->damppositions->values[index] = 1;
             // }
-            // if (y > 1 * height / 4 - 5 && y < 1 * height / 4 + 15) {
+            // if (y > 1 * height / 4 - 6 && y < 1 * height / 4 + 16) {
             //     world->damppositions->values[index] = 1;
             // }
+
+            if (y > 100 && abs(100-x) < (150-y)) {
+                world->dampaccelerations->values[index] = 0.2;
+            }
+            if (x == 100 && y <= 101) {
+                world->dampaccelerations->values[index] = 0.0;
+            }
+            if (x == 51 || x == 149) {
+                world->dampaccelerations->values[index] = 0.0;
+            }
 
             // Wall at right third
             // if (x == 2 * width / 3) {
