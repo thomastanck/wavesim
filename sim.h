@@ -13,44 +13,44 @@ typedef struct SourceValue SourceValue;
 typedef struct Mic Mic;
 
 struct Source {
-    StateCallback callback;
-    void *state; // Internal state passed to callback to be used for any purpose
-    // Some ideas on how state can be used:
-    // - As parameters to generic callback functions (frequency to a generic sine wave generator)
-    // - As a PRNG state that callback can generate noise out of
-    // - Containing a pointer to another Source/Mic to allow for possible middleware shenanigans
-    StateKillCallback state_kill; // To be called at world_kill. Dellocate state and shit here.
+	StateCallback callback;
+	void *state;	// Internal state passed to callback to be used for any purpose
+	            	// Some ideas on how state can be used:
+	            	// - As parameters to generic callback functions (frequency to a generic sine wave generator)
+	            	// - As a PRNG state that callback can generate noise out of
+	            	// - Containing a pointer to another Source/Mic to allow for possible middleware shenanigans
+	StateKillCallback state_kill; // To be called at world_kill. Dellocate state and shit here.
 };
 struct SourceValue {
-    SourceValueCallback callback;
-    void *state;
-    StateKillCallback state_kill;
+	SourceValueCallback callback;
+	void *state;
+	StateKillCallback state_kill;
 };
 struct Mic {
-    ConstStateCallback callback;
-    void *state;
-    StateKillCallback state_kill;
+	ConstStateCallback callback;
+	void *state;
+	StateKillCallback state_kill;
 };
 
 struct Frame {
-    int width, height;
-    float values[];
+	int width, height;
+	float values[];
 };
 struct World {
-    int width, height;
-    float time;
+	int width, height;
+	float time;
 
-    Frame *accelerations;
-    Frame *velocities;
-    Frame *positions;
+	Frame *accelerations;
+	Frame *velocities;
+	Frame *positions;
 
-    Frame *dampaccelerations; // walls/refraction
-    Frame *dampvelocities;    // damping
-    Frame *damppositions;     // walls
+	Frame *dampaccelerations;	// walls/refraction
+	Frame *dampvelocities;   	// damping
+	Frame *damppositions;    	// walls
 
-    int num_sources, num_mics;
-    Source *sources;
-    Mic *mics;
+	int num_sources, num_mics;
+	Source *sources;
+	Mic *mics;
 };
 
 float frame_read(Frame *frame, int x, int y, float def);
